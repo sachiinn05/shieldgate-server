@@ -1,17 +1,59 @@
-const checkRequest = async (data) => {
-  const { ip } = data;
+const redis = require("../config/redis");
 
-  if (!ip) {
+const WINDOW_SIZE = 60; 
+const MAX_REQUESTS = 10;
+
+const checkRequest = async (data) => {
+  try {
+    const { ip } = data;
+
+    if (!ip) {
+      return {
+        allowed: false,
+        message: "IP is required",
+      };
+    }
+
+    const key = `rate_limit:${ip}`;
+    const currentTime = Date.now();
+
+  
+    await redis.zadd(key, currentTime, `${currentTime}`);
+
+    
+    const windowStart = currentTime - WINDOW_SIZE * 1000;
+    await redis.zremrangebyscore(key, 0, windowStart);
+
+    
+    const requestCount = await redis.zcount(
+      key,
+      windowStart,
+      currentTime
+    )
+    await redis.expire(key, WINDOW_SIZE);
+
+    
+    if (requestCount > MAX_REQUESTS) {
+      return {
+        allowed: false,
+        totalRequest: requestCount,
+        message: "Too many requests. Try again later.",
+      };
+    }
+
+    return {
+      allowed: true,
+      totalRequest: requestCount,
+      message: `Requests in last ${WINDOW_SIZE} sec: ${requestCount}`,
+    };
+
+  } catch (error) {
+    console.error("Rate Limit Error", error);
     return {
       allowed: false,
-      message: "IP is required",
+      message: "Internal server error",
     };
   }
-
-  return {
-    allowed: true,
-    message: `Request allowed for IP ${ip}`,
-  };
 };
 
 module.exports = {

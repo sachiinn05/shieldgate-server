@@ -13,7 +13,7 @@ app.use(express.json());
 
 
 app.get("/", (req, res) => {
-  res.send("ShieldGate Running 🚀");
+  res.send("ShieldGate Running ");
 });
 
 
