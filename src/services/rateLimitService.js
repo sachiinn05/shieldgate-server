@@ -17,8 +17,8 @@ const checkRequest = async (data) => {
     const key = `rate_limit:${ip}`;
     const currentTime = Date.now();
 
-  
-    await redis.zadd(key, currentTime, `${currentTime}`);
+    const uniqueValue=`${currentTime}-${Math.random()}`;
+    await redis.zadd(key, currentTime, uniqueValue);
 
     
     const windowStart = currentTime - WINDOW_SIZE * 1000;
