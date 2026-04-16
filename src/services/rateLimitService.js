@@ -1,11 +1,15 @@
 const redis = require("../config/redis");
 
-const WINDOW_SIZE = 60; 
-const MAX_REQUESTS = 10;
+const WINDOW_SIZE = 60;
+
+const LIMITS={
+  free_user:10,
+  premium_user:50,
+};
 
 const checkRequest = async (data) => {
   try {
-    const { ip } = data;
+    const { ip,apiKey="free_user" } = data;
 
     if (!ip) {
       return {
@@ -13,9 +17,11 @@ const checkRequest = async (data) => {
         message: "IP is required",
       };
     }
-
-    const key = `rate_limit:${ip}`;
+   
+    const MAX_REQUESTS = LIMITS[apiKey] || 10;
+    const key = `rate_limit:${apiKey}:${ip}`;
     const currentTime = Date.now();
+
 
     const uniqueValue=`${currentTime}-${Math.random()}`;
     await redis.zadd(key, currentTime, uniqueValue);

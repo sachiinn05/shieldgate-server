@@ -1,6 +1,6 @@
 const axios=require("axios");
-const cache={};
-const CACHE_TTL=5000;
+const redis=require("../config/redis")
+const CACHE_TTL=5;
 const shieldGate=()=>{
     return async (req,res,next)=>
     {
@@ -11,36 +11,40 @@ const shieldGate=()=>{
 
         const ip=req.ip|| req.connection.remoteAddress || req.header["x-forwarded-for"];
 
-        const now=Date.now();
+         const apiKey=req.headers["x-api-key"] || "free_user";
+         const cacheKey=`cache:&{apiKey}:${ip}`;
+         
+         const cacheData=await redis.get(cacheKey);
 
-        if(cache[ip] && cache[ip].expiry>now)
-        {
-            console.log("CACHE HIT");
+         if(cacheData)
+         {
+            console.log("REDIS CACHE HIT");
+
+            const parsed=JSON.parse(cacheData);
+
+            if(!parsed.allowed)
+            {
+              return res.status(429).json(parsed);
+            }
+            return next();
             
-        
-        if(!cache[ip].allowed)
-        {
-            return res.status(429).json({
-                allowed:false,
-                message:"Two many requests (cached)",
-            });
-        }
-        return next();
-    }
-    console.log("CACHE MISS");
-    
+         }
+         console.log("REDIS CACHE MISS");
 
         const response=await axios.post(
             "http://localhost:8001/api/check-request",
-            {ip},
+            {ip,apiKey},
             {timeout:500}
         );
 
         const data=response.data;
-        cache[ip]={
-            allowed:data.allowed,
-            expiry:now+CACHE_TTL
-        };
+       await redis.set(
+        cacheKey,
+        JSON.stringify(data),
+        "EX",
+        CACHE_TTL,
+       );
+       
         if(!data.allowed)
         {
             return res.status(429).json(data);
