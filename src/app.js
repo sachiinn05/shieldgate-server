@@ -5,6 +5,7 @@ const connectDB = require("./config/database");
 require("./config/redis");
 
 const rateLimitRoutes = require("./routes/rateLimitRoutes");
+const statsRouter=require("./routes/statsRoutes");
 const shieldGate=require("./middleware/shieldGateMiddleware");
 
 const app = express();
@@ -21,6 +22,7 @@ app.get("/test", (req, res) => {
 });
 
 app.use("/api", rateLimitRoutes);
+app.use("/api/stats",statsRouter)
 
 
 
