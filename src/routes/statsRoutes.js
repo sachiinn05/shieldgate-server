@@ -48,7 +48,21 @@ statsRouter.get("/user",async (req,res)=>{
 
 statsRouter.get("/timeline", async (req, res) => {
   try {
+    const { apiKey } = req.query;
+
+    const matchStage = apiKey ? { apiKey } : {};
+
+    const now = new Date();
+    const lastHour = new Date(now - 60 * 60 * 1000);
+
     const data = await RequestLog.aggregate([
+      {
+    
+        $match: {
+          ...matchStage,
+          timestamp: { $gte: lastHour },
+        },
+      },
       {
         $group: {
           _id: {
@@ -87,7 +101,7 @@ statsRouter.get("/timeline", async (req, res) => {
 
     res.json(data);
   } catch (error) {
-    console.error(error);
+    console.error("Timeline Error:", error);
     res.status(500).json({ error: "Server Error" });
   }
 });
