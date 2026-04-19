@@ -45,4 +45,50 @@ statsRouter.get("/user",async (req,res)=>{
     res.status(500).json({ error: "Server Error" });
   }
 })
+
+statsRouter.get("/timeline", async (req, res) => {
+  try {
+    const data = await RequestLog.aggregate([
+      {
+        $group: {
+          _id: {
+            hour: { $hour: "$timestamp" },
+            minute: { $minute: "$timestamp" },
+          },
+          requests: { $sum: 1 },
+        },
+      },
+      {
+        $sort: {
+          "_id.hour": 1,
+          "_id.minute": 1,
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          time: {
+            $concat: [
+              { $toString: "$_id.hour" },
+              ":",
+              {
+                $cond: [
+                  { $lt: ["$_id.minute", 10] },
+                  { $concat: ["0", { $toString: "$_id.minute" }] },
+                  { $toString: "$_id.minute" },
+                ],
+              },
+            ],
+          },
+          requests: 1,
+        },
+      },
+    ]);
+
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
 module.exports=statsRouter;
