@@ -1,6 +1,6 @@
 const redis = require("../config/redis");
 const RequestLog = require("../model/RequestLog");
-const { getIO } = require("../socket"); 
+const { getIO } = require("../socket");
 
 const WINDOW_SIZE = 60;
 
@@ -20,7 +20,7 @@ const checkRequest = async (data) => {
       };
     }
 
-    const io = getIO(); 
+    const io = getIO();
 
     const MAX_REQUESTS = LIMITS[apiKey] || 10;
 
@@ -42,20 +42,25 @@ const checkRequest = async (data) => {
 
     await redis.expire(key, WINDOW_SIZE);
 
+    const eventData = {
+      ip,
+      apiKey,
+      totalRequests: requestCount,
+      timestamp: new Date(), 
+    };
 
+    
     if (requestCount > MAX_REQUESTS) {
       await RequestLog.create({
         ip,
         apiKey,
         allowed: false,
+        timestamp: new Date(), 
       });
 
       io.emit("request_update", {
-        ip,
-        apiKey,
+        ...eventData,
         allowed: false,
-        totalRequests: requestCount,
-        time: new Date(),
       });
 
       return {
@@ -65,19 +70,17 @@ const checkRequest = async (data) => {
       };
     }
 
-  
+    
     await RequestLog.create({
       ip,
       apiKey,
       allowed: true,
+      timestamp: new Date(), 
     });
 
     io.emit("request_update", {
-      ip,
-      apiKey,
+      ...eventData,
       allowed: true,
-      totalRequests: requestCount,
-      time: new Date(),
     });
 
     return {
@@ -87,7 +90,7 @@ const checkRequest = async (data) => {
     };
 
   } catch (error) {
-    console.error("Rate Limit Error", error);
+    console.error("Rate Limit Error:", error);
 
     return {
       allowed: false,

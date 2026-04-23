@@ -1,66 +1,38 @@
-const axios=require("axios");
-const redis=require("../config/redis")
-const CACHE_TTL=5;
-const shieldGate=()=>{
-    return async (req,res,next)=>
-    {
-      try{
-         if (req.path === "/api/check-request") {
-        return next();
+const { checkRequest } = require("../services/rateLimitService");
+const redis = require("../config/redis");
+
+const CACHE_TTL = 3;
+
+const shieldGate = () => {
+  return async (req, res, next) => {
+    try {
+      const ip =
+        req.headers["x-forwarded-for"]?.split(",")[0] ||
+        req.socket.remoteAddress;
+
+      const apiKey =
+        req.headers["x-api-key"] ||
+        req.query.apiKey ||
+        "free_user";
+
+      const cacheKey = `cache:${apiKey}:${ip}`;
+
+    
+      const result = await checkRequest({ ip, apiKey });
+
+
+      await redis.set(cacheKey, JSON.stringify(result), "EX", CACHE_TTL);
+
+      if (!result.allowed) {
+        return res.status(429).json(result);
       }
 
-        const ip=req.ip|| req.connection.remoteAddress || req.header["x-forwarded-for"];
-
-         const apiKey=req.headers["x-api-key"] || "free_user";
-         const cacheKey=`cache:&{apiKey}:${ip}`;
-         
-         const cacheData=await redis.get(cacheKey);
-
-         if(cacheData)
-         {
-            console.log("REDIS CACHE HIT");
-
-            const parsed=JSON.parse(cacheData);
-
-            if(!parsed.allowed)
-            {
-              return res.status(429).json(parsed);
-            }
-            return next();
-            
-         }
-         console.log("REDIS CACHE MISS");
-
-        const response=await axios.post(
-            "http://localhost:8001/api/check-request",
-            {ip,apiKey},
-            {timeout:500}
-        );
-
-        const data=response.data;
-       await redis.set(
-        cacheKey,
-        JSON.stringify(data),
-        "EX",
-        CACHE_TTL,
-       );
-       
-        if(!data.allowed)
-        {
-            return res.status(429).json(data);
-
-        }
-        next();
-      }catch(error)
-      {
-        if (error.response && error.response.status === 429) {
-        return res.status(429).json(error.response.data);
-        }
-
-        console.error("Middleware Error:", error.message);
-
-        next();
-      }
-    };
+      next();
+    } catch (error) {
+      console.error("Middleware Error:", error);
+      next();
+    }
+  };
 };
-module.exports=shieldGate;
+
+module.exports = shieldGate;
