@@ -9,96 +9,59 @@ const LIMITS = {
   premium_user: 50,
 };
 
-const checkRequest = async (data) => {
+const checkRequest = async ({ ip, apiKey = "free_user" }) => {
   try {
-    const { ip, apiKey = "free_user" } = data;
-
-    if (!ip) {
-      return {
-        allowed: false,
-        message: "IP is required",
-      };
-    }
+    if (!ip) return { 
+      allowed: false,
+       message: "IP required"
+       };
 
     const io = getIO();
-
-    const MAX_REQUESTS = LIMITS[apiKey] || 10;
+    const MAX = LIMITS[apiKey] || 10;
 
     const key = `rate_limit:${apiKey}:${ip}`;
-    const currentTime = Date.now();
-    const windowStart = currentTime - WINDOW_SIZE * 1000;
+    const now = Date.now();
+    const start = now - WINDOW_SIZE * 1000;
 
-    const uniqueValue = `${currentTime}-${Math.random()}`;
+    const unique = `${now}-${Math.random()}`;
 
-    await redis.zadd(key, currentTime, uniqueValue);
+    await redis.zadd(key, now, unique);
+    await redis.zremrangebyscore(key, 0, start);
 
-    await redis.zremrangebyscore(key, 0, windowStart);
-
-    const requestCount = await redis.zcount(
-      key,
-      windowStart,
-      currentTime
-    );
-
+    const count = await redis.zcount(key, start, now);
     await redis.expire(key, WINDOW_SIZE);
 
-    const eventData = {
+    const payload = {
       ip,
       apiKey,
-      totalRequests: requestCount,
-      timestamp: new Date(), 
+      totalRequests: count,
+      timestamp: new Date(),
     };
 
-    
-    if (requestCount > MAX_REQUESTS) {
-      await RequestLog.create({
-        ip,
-        apiKey,
-        allowed: false,
-        timestamp: new Date(), 
-      });
+    if (count > MAX) {
+      await RequestLog.create({ ...payload, allowed: false });
 
-      io.emit("request_update", {
-        ...eventData,
-        allowed: false,
-      });
+      io.emit("request_update", { ...payload, allowed: false });
 
       return {
         allowed: false,
-        totalRequests: requestCount,
-        message: `Rate limit exceeded for ${apiKey}`,
+        totalRequests: count,
+        message: "Rate limit exceeded",
       };
     }
 
-    
-    await RequestLog.create({
-      ip,
-      apiKey,
-      allowed: true,
-      timestamp: new Date(), 
-    });
+    await RequestLog.create({ ...payload, allowed: true });
 
-    io.emit("request_update", {
-      ...eventData,
-      allowed: true,
-    });
+    io.emit("request_update", { ...payload, allowed: true });
 
     return {
       allowed: true,
-      totalRequests: requestCount,
-      message: `Requests: ${requestCount}`,
+      totalRequests: count,
     };
-
-  } catch (error) {
-    console.error("Rate Limit Error:", error);
-
-    return {
-      allowed: false,
-      message: "Internal server error",
-    };
+  } catch (e) {
+    console.error(e);
+    return { allowed: false, message: "Server error" };
   }
 };
 
-module.exports = {
-  checkRequest,
-};
+module.exports = { checkRequest };

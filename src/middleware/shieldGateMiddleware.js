@@ -1,7 +1,5 @@
 const { checkRequest } = require("../services/rateLimitService");
-const redis = require("../config/redis");
-
-const CACHE_TTL = 3;
+const User = require("../model/User");
 
 const shieldGate = () => {
   return async (req, res, next) => {
@@ -11,25 +9,30 @@ const shieldGate = () => {
         req.socket.remoteAddress;
 
       const apiKey =
-        req.headers["x-api-key"] ||
-        req.query.apiKey ||
-        "free_user";
+        req.headers["x-api-key"] || req.query.apiKey;
 
-      const cacheKey = `cache:${apiKey}:${ip}`;
+      if (!apiKey) {
+        return res.status(401).json({ message: "API key required" });
+      }
 
-    
-      const result = await checkRequest({ ip, apiKey });
+      const user = await User.findOne({ apiKey });
+      if (!user) {
+        return res.status(403).json({ message: "Invalid API key" });
+      }
 
-
-      await redis.set(cacheKey, JSON.stringify(result), "EX", CACHE_TTL);
+      
+      const result = await checkRequest({
+        ip,
+        apiKey: user.plan, 
+      });
 
       if (!result.allowed) {
         return res.status(429).json(result);
       }
 
       next();
-    } catch (error) {
-      console.error("Middleware Error:", error);
+    } catch (err) {
+      console.error("Middleware Error:", err);
       next();
     }
   };
