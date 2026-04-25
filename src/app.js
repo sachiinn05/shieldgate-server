@@ -13,7 +13,7 @@ const shieldGate = require("./middleware/shieldGateMiddleware");
 const authRoutes = require("./routes/authRoutes");
 const rateLimitRoutes = require("./routes/rateLimitRoutes");
 const statsRoutes = require("./routes/statsRoutes");
-
+const userRouter=require("./routes/userRoutes")
 const app = express();
 const server = http.createServer(app);
 
@@ -38,6 +38,7 @@ app.get("/test", (req, res) => {
 
 app.use("/api", rateLimitRoutes);
 app.use("/api/stats", statsRoutes);
+app.use("/api/user",userRouter)
 
 
 app.use((err, req, res, next) => {
