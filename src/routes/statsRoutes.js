@@ -1,31 +1,36 @@
-const express= require("express");
-const statsRouter=express.Router();
+const express = require("express");
+const statsRouter = express.Router();
 
-const RequestLog=require("../model/RequestLog");
+const RequestLog = require("../model/RequestLog");
 
-statsRouter.get("/overview",async(req,res)=>{
-    try{
-        const total= await RequestLog.countDocuments();
-        const allowed=await RequestLog.countDocuments({allowed:true});
-        const blocked=await RequestLog.countDocuments({allowed:false});
 
-        res.json({
-            totalRequests:total,
-            allowed,
-            blocked,
-        });
-    }catch(error)
-    {
-        res.status(500).json({error:"Server Error"});
-    }
+statsRouter.get("/overview", async (req, res) => {
+  try {
+    const total = await RequestLog.countDocuments();
+    const allowed = await RequestLog.countDocuments({ allowed: true });
+    const blocked = await RequestLog.countDocuments({ allowed: false });
+
+    res.json({
+      totalRequests: total,
+      allowed,
+      blocked,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Server Error" });
+  }
 });
 
-statsRouter.get("/user",async (req,res)=>{
-    try{
-        const {apiKey}=req.query;
 
-        const total=await RequestLog.countDocuments({apiKey});
-        const allowed = await RequestLog.countDocuments({
+statsRouter.get("/user", async (req, res) => {
+  try {
+    const apiKey = req.headers["x-api-key"];
+
+    if (!apiKey) {
+      return res.status(401).json({ message: "API key required" });
+    }
+
+    const total = await RequestLog.countDocuments({ apiKey });
+    const allowed = await RequestLog.countDocuments({
       apiKey,
       allowed: true,
     });
@@ -40,26 +45,27 @@ statsRouter.get("/user",async (req,res)=>{
       allowed,
       blocked,
     });
-    }
-     catch (error) {
+  } catch (error) {
     res.status(500).json({ error: "Server Error" });
   }
-})
+});
+
 
 statsRouter.get("/timeline", async (req, res) => {
   try {
-    const { apiKey } = req.query;
+    const apiKey = req.headers["x-api-key"];
 
-    const matchStage = apiKey ? { apiKey } : {};
+    if (!apiKey) {
+      return res.status(401).json({ message: "API key required" });
+    }
 
     const now = new Date();
     const lastHour = new Date(now - 60 * 60 * 1000);
 
     const data = await RequestLog.aggregate([
       {
-    
         $match: {
-          ...matchStage,
+          apiKey,
           timestamp: { $gte: lastHour },
         },
       },
@@ -105,4 +111,5 @@ statsRouter.get("/timeline", async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 });
-module.exports=statsRouter;
+
+module.exports = statsRouter;
